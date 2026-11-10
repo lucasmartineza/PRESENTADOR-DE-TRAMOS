@@ -129,6 +129,7 @@ h2::before{content:"";width:8px;height:22px;background:var(--yellow);transform:s
     </fieldset>
     <fieldset><legend>Estilo</legend>
       <label for="fAccent">Color de acento<input type="color" id="fAccent"></label>
+      <label for="fDur">Duración del video<select id="fDur"><option value="0">Automática, según el tramo</option><option value="20">20 segundos</option><option value="30">30 segundos</option><option value="45">45 segundos</option><option value="60">60 segundos</option><option value="90">90 segundos</option></select></label>
       <label for="fEx">Relieve<select id="fEx"><option value="1.5">Ampliado ×1,5</option><option value="2.5">Ampliado ×2,5</option><option value="4">Ampliado ×4</option></select></label>
     </fieldset>
     <div class="go"><button class="btn primary" type="button" id="gen">Generar animación</button><span class="status" id="genStatus" role="status"></span></div>
@@ -297,7 +298,7 @@ function build(){signs.length=0;
 }
 
 // ---------- línea de tiempo ----------
-const TL={intro:2.2,draw:Math.round(clamp(8+TR.km*.85,12,30)*TW.mean),out:3.5};TL.end=TL.intro+TL.draw+TL.out;
+const HOLD=5,TL={intro:2.2,draw:CFG.dur?Math.max(6,CFG.dur-2.2-3.5-HOLD):Math.round(clamp(8+TR.km*.85,12,30)*TW.mean),out:3.5};TL.end=TL.intro+TL.draw+TL.out;
 const state={t:0,playing:false,idle:0};
 const rawProg=t=>{const u=clamp((t-TL.intro)/TL.draw,0,1);if(u<=0)return 0;if(u>=1)return 1;const c=TW.ct;let lo=0,hi=T.N;while(hi-lo>1){const m=(lo+hi)>>1;if(c[m]<=u)lo=m;else hi=m}return(lo+(u-c[lo])/((c[hi]-c[lo])||1))/T.N};
 const progAt=t=>{let s=0;for(let k=-4;k<=4;k++)s+=rawProg(t+k*.3);return s/9};
@@ -312,7 +313,7 @@ function frame(){
   const ph=(t*1.2)%1;W.ring.scale.setScalar(1+ph*2.2);W.ring.material.opacity=(1-ph)*.8*(p>0&&p<1?1:0);W.head.visible=t>TL.intro*.8;
   for(const m of W.marks){const a=m.f===0?smooth(TL.intro*.6,TL.intro,t):m.f>=1?smooth(TL.intro+TL.draw-.3,TL.intro+TL.draw+.4,t):smooth(m.f-.004,m.f+.02,p)*(p>=m.f?1:0);m.ln.material.opacity=a*.9;m.sp.material.opacity=a}
   // cámara: órbita continua, sigue la punta del trazo y se aleja al final
-  const zin=smooth(TL.intro*.5,TL.intro+3,t),away=smooth(TL.intro+TL.draw-5,TL.end,t),near=zin*(1-away);
+  const zin=smooth(TL.intro*.5,TL.intro+3,t),away=smooth(TL.intro+TL.draw-Math.min(5,TL.draw*.3),TL.end,t),near=zin*(1-away);
   const V=FMT==='v',follow=near,az=-2.2+(t/TL.end)*(4.2+2*Math.PI*Math.round((TL.end*.1325-4.2)/(2*Math.PI)))+state.idle,q=zoomAt(t),far=V?7.6:3,dn=V?.95-.68*q:.62-.47*q,dnk=Math.max(W.R*dn,Math.min(V?1.9:1.2,W.R*.55)),d=W.R*far+(dnk-W.R*far)*near,el=.4+.22*away+.14*(1-zin);
   W.head.scale.setScalar(clamp(d/(W.R*.55),.3,1.5));
   {const k=smooth(V?.42:.26,V?.7:.44,d/W.R),a=W.tubes[0],b=W.tubes[1];a.m.material.opacity=k;a.hl.material.opacity=.16*k;b.m.material.opacity=1-k;b.hl.material.opacity=.16*(1-k);a.m.visible=a.hl.visible=k>.01;b.m.visible=b.hl.visible=k<.99}
@@ -404,15 +405,15 @@ function exportVideo(fmt){if(REC)return;if(!window.MediaRecorder||!hud.captureSt
 
 $('wxBtn').onclick=()=>{SHOWWX=!SHOWWX;$('wxBtn').setAttribute('aria-pressed',String(SHOWWX));$('wxBtn').textContent=SHOWWX?'Quitar clima del horario del tramo':'Agregar clima del horario del tramo';frame()};
 $('expH').onclick=()=>exportVideo('h');$('expV').onclick=()=>exportVideo('v');
-let last=0,alive=true;function loop(ts){if(!alive)return;const dt=Math.min(.1,(ts-last)/1000);last=ts;if(state.playing){if(state.t<TL.end)state.t=Math.min(TL.end,state.t+dt);else{state.idle+=dt*.12;if(REC){REC.hold+=dt;if(REC.hold>2.2&&REC.mr.state==='recording')REC.mr.stop()}}
-  frame();if(REC){REC.rx.drawImage(glc,0,0);REC.rx.drawImage(hud,0,0);$('status').textContent='Grabando… '+Math.round(Math.min(1,(state.t+REC.hold)/(TL.end+2.2))*100)+' %. Dejá esta pestaña a la vista hasta que termine.'}
+let last=0,alive=true;function loop(ts){if(!alive)return;const dt=Math.min(.1,(ts-last)/1000);last=ts;if(state.playing){if(state.t<TL.end)state.t=Math.min(TL.end,state.t+dt);else{state.idle+=dt*.12;if(REC){REC.hold+=dt;if(REC.hold>HOLD&&REC.mr.state==='recording')REC.mr.stop()}}
+  frame();if(REC){REC.rx.drawImage(glc,0,0);REC.rx.drawImage(hud,0,0);$('status').textContent='Grabando… '+Math.round(Math.min(1,(state.t+REC.hold)/(TL.end+HOLD))*100)+' %. Dejá esta pestaña a la vista hasta que termine.'}
   }requestAnimationFrame(loop)}
 ficha();build();setFormat('h');
 if(document.fonts&&document.fonts.load)Promise.all([document.fonts.load('700 54px Jost'),document.fonts.load('500 40px Jost')]).then(()=>{if(alive){build();frame()}}).catch(()=>{});
 const reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 if(reduce){state.t=TL.end;frame()}else state.playing=true;sync();
 window.__seek=t=>{state.playing=false;state.t=t;frame();sync()};
-$('status').textContent='1920 × 1080 y 1080 × 1920. La grabación dura lo mismo que la animación, unos '+Math.round(TL.end+2)+' segundos.';
+$('status').textContent='1920 × 1080 y 1080 × 1920. La grabación dura lo mismo que la animación, '+Math.round(TL.end+HOLD)+' segundos, con '+HOLD+' al final para leer el resumen.';
 requestAnimationFrame(loop);
   return{stop(){alive=false;state.playing=false;scene.traverse(o=>{o.geometry&&o.geometry.dispose();if(o.material){o.material.map&&o.material.map.dispose();o.material.dispose()}})}};
 }
@@ -476,15 +477,15 @@ async function fetchWeather(la,lo,date,time){try{const r=await fetch(`https://ap
     return{place:'',when:d.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+', '+time+' h',hour:time,temp:Math.round(L('temperature_2m')),cond:WMO(code),condShort:WMO(code).toLowerCase(),wind:Math.round(L('wind_speed_10m')),gust:Math.round(L('wind_gusts_10m')),rain:pp>0?es(pp,1)+' mm':'Sin lluvia',hum:Math.round(L('relative_humidity_2m')),past}}catch(e){return null}}
 // ---------- formulario ----------
 const DEMO={geo:{LL:(()=>{const v=varints(TR.track),o=[];let la=0,lo=0;for(let i=0;i<v.length;i+=2){la+=v[i];lo+=v[i+1];o.push([la/1e5,lo/1e5])}return o})(),bbox:TR.bbox,nx:TR.nx,ny:TR.ny,G:cumsum(varints(TR.grid)),P:cumsum(varints(TR.prof)),len:TR.km*1000,src:'Open-Meteo (Copernicus, celdas de 90 m)'},wx:Object.assign({past:true},WX),wxKey:'2026-11-07|10:48'};
-function fields(){return{rally:$('fRally').value.trim(),pe:$('fPe').value.trim(),name:$('fName').value.trim(),km:parseFloat(String($('fKm').value).replace(',','.')),date:$('fDate').value,time:$('fTime').value,presenta:$('fPresenta').value.trim(),sponsorName:$('fSponsorName').value.trim(),spPlate:$('fSpPlate').checked,catPlate:$('fCatPlate').checked,accent:$('fAccent').value,ex:parseFloat($('fEx').value)}}
-function saveBrand(){const f=fields(),o=store.get();store.set({...o,rally:f.rally,presenta:f.presenta,sponsorName:f.sponsorName,spPlate:f.spPlate,catPlate:f.catPlate,accent:f.accent,ex:f.ex})}
+function fields(){return{rally:$('fRally').value.trim(),pe:$('fPe').value.trim(),name:$('fName').value.trim(),km:parseFloat(String($('fKm').value).replace(',','.')),date:$('fDate').value,time:$('fTime').value,presenta:$('fPresenta').value.trim(),sponsorName:$('fSponsorName').value.trim(),spPlate:$('fSpPlate').checked,catPlate:$('fCatPlate').checked,accent:$('fAccent').value,ex:parseFloat($('fEx').value),dur:parseFloat($('fDur').value)||0}}
+function saveBrand(){const f=fields(),o=store.get();store.set({...o,rally:f.rally,presenta:f.presenta,sponsorName:f.sponsorName,spPlate:f.spPlate,catPlate:f.catPlate,accent:f.accent,ex:f.ex,dur:f.dur})}
 async function generate(){const btn=$('gen');btn.disabled=true;try{
     const f=fields();if(APP.pending){say('Preparando el recorrido…');APP.geo=await fetchTerrain(APP.pending,say);APP.pending=null;APP.wxKey=''}
-    const geo=APP.geo,km=f.km>0?f.km:geo.len/1000,mid=geo.LL[Math.floor(geo.LL.length/2)],key=f.date&&f.time?f.date+'|'+f.time:'';
+    const geo=APP.geo,km=f.km>0?f.km:geo.len/1000,mid=geo.LL[0],key=f.date&&f.time?f.date+'|'+f.time:'';
     if(key!==APP.wxKey){APP.wx=null;if(key){say('Consultando el clima de esa fecha y hora…');APP.wx=await fetchWeather(mid[0],mid[1],f.date,f.time)}APP.wxKey=key}
     say('Armando la animación…');await new Promise(r=>setTimeout(r,30));
     const tr={rally:f.rally,pe:f.pe,name:f.name,sub:'',sponsor:f.sponsorName,km,bbox:geo.bbox,nx:geo.nx,ny:geo.ny,G:geo.G,P:geo.P,LL:geo.LL,src:geo.src};
-    const cfg={accent:/^#[0-9a-f]{6}$/i.test(f.accent)?f.accent:'#ff6a13',ex:f.ex||2.5,presenta:f.presenta,sponsorImg:await loadImg(APP.logos.sponsor),catImg:await loadImg(APP.logos.cat),sponsorPlate:f.spPlate,catPlate:f.catPlate};
+    const cfg={accent:/^#[0-9a-f]{6}$/i.test(f.accent)?f.accent:'#ff6a13',ex:f.ex||2.5,dur:f.dur,presenta:f.presenta,sponsorImg:await loadImg(APP.logos.sponsor),catImg:await loadImg(APP.logos.cat),sponsorPlate:f.spPlate,catPlate:f.catPlate};
     document.documentElement.style.setProperty('--yellow',cfg.accent);
     if(APP.eng)APP.eng.stop();APP.eng=boot(tr,APP.wx,cfg);saveBrand();
     say(key&&!APP.wx?'Listo. No hay datos de clima para esa fecha: el servicio cubre unos tres meses hacia atrás y 16 días hacia adelante.':'Listo.');
@@ -500,7 +501,7 @@ $('gen').onclick=generate;
 // arranque: ejemplo cargado + marca guardada
 (async()=>{const b=store.get();APP.geo=DEMO.geo;APP.wx=DEMO.wx;APP.wxKey=DEMO.wxKey;
   $('fRally').value=b.rally||TR.rally;$('fPe').value=TR.pe;$('fName').value=TR.name;$('fKm').value=String(TR.km).replace('.',',');$('fDate').value='2026-11-07';$('fTime').value='10:48';
-  $('fPresenta').value=b.presenta!=null?b.presenta:'Presenta';$('fSponsorName').value=b.sponsorName||'';$('fSpPlate').checked=b.spPlate!==false;$('fCatPlate').checked=!!b.catPlate;$('fAccent').value=b.accent||'#ff6a13';$('fEx').value=String(b.ex||2.5);
+  $('fPresenta').value=b.presenta!=null?b.presenta:'Presenta';$('fSponsorName').value=b.sponsorName||'';$('fSpPlate').checked=b.spPlate!==false;$('fCatPlate').checked=!!b.catPlate;$('fAccent').value=b.accent||'#ff6a13';$('fEx').value=String(b.ex||2.5);$('fDur').value=String(b.dur||0);
   APP.logos.sponsor=b.sponsorLogo==='none'?null:(b.sponsorLogo||SPONSOR_LOGO);APP.logos.cat=b.catLogo==='none'?null:(b.catLogo||CODASUR_LOGO);$('xSponsor').hidden=!APP.logos.sponsor;$('xCat').hidden=!APP.logos.cat;
   await generate();say('Ejemplo cargado: PE 2 del Rally de Traslasierra. Cargá un KMZ, KML o GPX para armar otro tramo.')})();
 </script>
